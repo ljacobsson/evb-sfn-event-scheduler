@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  StepFunctionsRuleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+  StepFunctionsRuleRolePolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: policy1
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: Statement1
+            Effect: Allow
+            Action:
+              - states:StartExecution
+            Resource:
+              - !Ref StateMachine
+      Roles:
+        - !Ref StepFunctionsRuleRole
+  StepFunctionsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      RoleArn: !GetAtt StepFunctionsRuleRole.Arn
+      EventBusName: myeventbus
+      EventPattern:
+        detail:
+          schedule:
+            runAt:
+              - exists: true
+      State: ENABLED
+      Targets:
+        - RoleArn: !GetAtt StepFunctionsRuleRole.Arn
+          Arn: !Ref StateMachine
+          Id: StepFunctionTargetId
+          InputTransformer:
+            InputPathsMap:
+              Schedule: $.detail.schedule
+              Event: $.detail.event
+            InputTemplate: !Sub '{"Schedule": <Schedule>, "Event": <Event> }'
+  StateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Sid: Statement1
+              Effect: Allow
+              Action:
+                - sns:Publish
+              Resource:
+                - !Ref EventTopic
+      Definition:
+        StartAt: WaitState
+        States:
+          WaitState:
+            Type: Wait
+            TimestampPath: $.Schedule.runAt
+            Next: SendEvent
+          SendEvent:
+            Type: Task
+            Resource: arn:aws:states:::sns:publish
+            Parameters:
+              TopicArn: !Ref EventTopic
+              Message.$: $.Event
+            End: true
+  EventTopic:
+    Type: AWS::SNS::Topic
+  EventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: EventFunction.handler
+      Runtime: nodejs14.x
+      Events:
+        SNS:
+          Type: SNS
+          Properties:
+            Topic: !Ref EventTopic

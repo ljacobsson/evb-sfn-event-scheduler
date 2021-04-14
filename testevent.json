@@ -1,0 +1,8 @@
+[
+  {
+    "Source": "my-source",
+    "Detail": "{ \"schedule\": {\"runAt\": \"2021-04-14T20:03:30Z\" }, \"event\": {\"hello\": \"world\"}}",
+    "DetailType": "my-detail-type",
+    "EventBusName": "myeventbus"
+  }
+]
